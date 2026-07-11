@@ -25,6 +25,8 @@
 <meta name="twitter:title" content="Compounded – The Daily Compound Word Game">
 <meta name="twitter:description" content="Don’t be confounded, be compounded! Pair words to build genuine compound words – three boards a day, five lives per board.">
 <meta name="twitter:image" content="https://compoundedgame.com/social-card.png">
+<!-- GoatCounter analytics — cookieless, no personal data collected -->
+<script data-goatcounter="https://compoundedgame.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Righteous&display=swap" rel="stylesheet">
@@ -1337,6 +1339,24 @@
     letter-spacing: 0.02em;
     color: rgba(255,255,255,0.35);
   }
+  .board-message {
+    position: absolute;
+    left: 50%;
+    top: 58%;
+    transform: translate(-50%, -50%);
+    max-width: 640px;
+    padding: 0 24px;
+    text-align: center;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.5;
+    color: rgba(255,255,255,0.75);
+    display: none;
+    z-index: 5;
+  }
+  .board-message.visible { display: block; }
+  [data-theme="light"] .board-message { color: rgba(20,20,28,0.75); }
+
   [data-theme="light"] .overlay-footer {
     color: rgba(20,20,28,0.4);
   }
@@ -1653,6 +1673,8 @@
     <button class="help-menu-item" id="helpRules">How to Play</button>
     <hr class="help-menu-divider">
     <button class="help-menu-item" id="helpContact">About</button>
+    <hr class="help-menu-divider">
+    <button class="help-menu-item" id="helpPrivacy">Privacy</button>
   </div>
 
   <!-- Settings icon -->
@@ -1774,6 +1796,21 @@
     </div>
   </div>
 
+  <!-- Privacy modal -->
+  <div class="rules-modal-backdrop" id="privacyBackdrop">
+    <div class="rules-modal" style="width: 560px;">
+      <button class="rules-close" id="privacyClose">✕</button>
+      <div class="rules-modal-title">PRIVACY</div>
+      <hr class="rules-title-rule">
+      <div class="rules-text"><b>Your game data stays on your device.</b> Your progress, statistics and settings are stored only in your own browser (using local storage). They are never sent to a server, and nobody but you can see them. Clearing your browser data will erase them.</div>
+      <div class="rules-text"><b>Anonymous visit counting.</b> This site uses GoatCounter, a privacy-friendly analytics service, to count visits and anonymous game events (such as how many players complete a day's boards). It does not use cookies, does not collect personal data, and cannot identify you. No advertising or tracking networks are used.</div>
+      <div class="rules-text"><b>Fonts.</b> The game's fonts are loaded from Google Fonts, which means your browser requests those font files from Google's servers when the page loads.</div>
+      <div class="rules-text">Compounded has no accounts, no sign-ups and no ads. If you have any questions about privacy, please email <a href="mailto:contact@marcustolan.co.uk" class="contact-email-link">contact@marcustolan.co.uk</a>.</div>
+    </div>
+  </div>
+
+  <div class="board-message" id="boardMessage"></div>
+
   <div class="sep-line"></div>
 
   <!-- Game indicator — desktop only, top-left, clicking opens the day-jump input -->
@@ -1864,7 +1901,7 @@
       <button class="btn-play" id="startBtn">PLAY</button>
       <button class="btn-rules" id="startRulesBtn">RULES</button>
     </div>
-    <div class="overlay-footer">© 2026 Marcus Tolan. All rights reserved.</div>
+    <div class="overlay-footer">© 2026 Marcus Tolan. All rights reserved. · <a href="#" id="footerPrivacy" style="color: inherit; text-decoration: underline;">Privacy</a></div>
   </div>
 
 </div>
@@ -1885,20 +1922,21 @@ async function fetchBoards() {
   return j.boards;
 }
 
-function showBoardLoadError() {
-  const t = document.getElementById('wordDisplayText');
-  if (t) t.textContent = (location.protocol === 'file:')
-    ? 'Boards must be loaded from a web server \u2013 please play the hosted version.'
-    : 'Couldn\u2019t load today\u2019s boards \u2013 check your connection and refresh.';
-  const wd = document.getElementById('wordDisplay');
-  if (wd) wd.classList.add('visible');
+function showBoardMessage(msg) {
+  const el = document.getElementById('boardMessage');
+  if (el) { el.textContent = msg; el.classList.add('visible'); }
 }
-
+function hideBoardMessage() {
+  const el = document.getElementById('boardMessage');
+  if (el) el.classList.remove('visible');
+}
+function showBoardLoadError() {
+  showBoardMessage((location.protocol === 'file:')
+    ? 'Boards must be loaded from a web server \u2013 please play the hosted version.'
+    : 'Couldn\u2019t load today\u2019s boards \u2013 check your connection and refresh.');
+}
 function showDayCompleteMessage() {
-  const t = document.getElementById('wordDisplayText');
-  if (t) t.textContent = 'You\u2019ve completed today\u2019s game \u2013 new boards tomorrow!';
-  const wd = document.getElementById('wordDisplay');
-  if (wd) wd.classList.add('visible');
+  showBoardMessage('You\u2019ve completed today\u2019s game \u2013 new boards tomorrow!');
 }
 
 // ── Day / Board navigation ────────────────────────────────────────────────────
@@ -1948,6 +1986,10 @@ function advanceBoardIndex() {
       }));
     } catch(e) {}
     localStorage.setItem('completedGame', String(serverGame));
+    try {
+      const allWon = getDayResults().every(Boolean);
+      trackEvent(allWon ? 'day-completed-won' : 'day-completed');
+    } catch(e) {}
   }
 }
 
@@ -2800,6 +2842,15 @@ function updateBoardPill() {
   }
 }
 
+// Report an anonymous game event to GoatCounter (no-op if the script hasn't loaded)
+function trackEvent(name) {
+  try {
+    if (window.goatcounter && window.goatcounter.count) {
+      window.goatcounter.count({ path: name, event: true });
+    }
+  } catch(e) {}
+}
+
 async function startGame() {
   if (isMobile) { calcMobileLayout(); applyMobileLayout(); }
   lives = STARTING_LIVES; selectedCard = null; locked = false; gameOver = false; matchLog = []; selectedForUnpair = null; revealTappedIdx = null; lastRevealOrdered = null;
@@ -2834,6 +2885,7 @@ async function startGame() {
     try { hist = JSON.parse(localStorage.getItem('completedDayHistory') || 'null'); } catch(e) {}
     if (hist && hist.day === serverGame && Array.isArray(hist.boards) && hist.boards.length === BOARDS_PER_DAY) {
       boardHistory = hist.boards;
+      hideBoardMessage();
       gameOver = true;
       locked = true;
       updateGameIndicator();
@@ -2849,6 +2901,8 @@ async function startGame() {
   }
   const idx = getBoardIndex();
   currentBoard = dayBoards[getBoardInDay()];
+  hideBoardMessage();
+  trackEvent('board-' + (getBoardInDay() + 1) + '-started');
   // Reset day compounds counter and board history at start of new day (board 0)
   if (getBoardInDay() === 0) {
     dayCompoundsMade = 0;
@@ -3535,6 +3589,21 @@ document.getElementById('helpContact').addEventListener('click', (e) => {
   e.stopPropagation();
   closeHelpDropdown();
   openContact();
+});
+function openPrivacy() { document.getElementById('privacyBackdrop').classList.add('visible'); }
+function closePrivacy() { document.getElementById('privacyBackdrop').classList.remove('visible'); }
+document.getElementById('helpPrivacy').addEventListener('click', (e) => {
+  e.stopPropagation();
+  closeHelpDropdown();
+  openPrivacy();
+});
+document.getElementById('footerPrivacy').addEventListener('click', (e) => {
+  e.preventDefault();
+  openPrivacy();
+});
+document.getElementById('privacyClose').addEventListener('click', closePrivacy);
+document.getElementById('privacyBackdrop').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('privacyBackdrop')) closePrivacy();
 });
 document.addEventListener('click', (e) => {
   const dropdown = document.getElementById('helpDropdown');
