@@ -1411,8 +1411,14 @@
     35%  { opacity: 1; transform: translateY(-50%) scale(1);    }
     100% { opacity: 0; transform: translateY(-50%) scale(1.02); }
   }
+  @keyframes successAnimHold {
+    0%   { opacity: 0; transform: translateY(-50%) scale(0.48); }
+    28%  { opacity: 1; transform: translateY(-50%) scale(1);    }
+    48%  { opacity: 1; transform: translateY(-50%) scale(1);    } /* extra 0.4s hold */
+    100% { opacity: 0; transform: translateY(-50%) scale(1.02); }
+  }
   .success-text.show {
-    animation: successAnim 1.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    animation: successAnimHold 2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
   .intro-text {
     position: absolute;
@@ -1441,7 +1447,7 @@
 
   @keyframes shimmer {
     0%   { background: var(--card-correct); }
-    50%  { background: rgba(130,230,135,0.85); }
+    50%  { background: rgba(96,214,100,0.68); } /* peak softened to ~50% of previous intensity */
     100% { background: var(--card-correct); }
   }
   .card.shimmer {
