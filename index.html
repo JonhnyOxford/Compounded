@@ -2468,10 +2468,20 @@ function buildGrid(words, savedState) {
     el.innerHTML = `<span class="${labelClass}">${word.toUpperCase()}</span>`;
     applyPos(el, playPos(i));
     if (isMobile) {
-      let touchStartTime = 0;
-      el.addEventListener('touchstart', () => { touchStartTime = Date.now(); }, { passive: true });
+      // Tap vs swipe is decided by finger MOVEMENT, not press duration —
+      // a held press is still a tap if the finger stays put (<10px).
+      let touchX = 0, touchY = 0, touchMoved = false;
+      el.addEventListener('touchstart', (e) => {
+        touchMoved = false;
+        touchX = e.touches[0].clientX;
+        touchY = e.touches[0].clientY;
+      }, { passive: true });
+      el.addEventListener('touchmove', (e) => {
+        if (Math.abs(e.touches[0].clientX - touchX) > 10 ||
+            Math.abs(e.touches[0].clientY - touchY) > 10) touchMoved = true;
+      }, { passive: true });
       el.addEventListener('touchend', (e) => {
-        if (Date.now() - touchStartTime <= 200) {
+        if (!touchMoved) {
           e.preventDefault();
           if (gameOver) {
             onRevealCardTap(i, false); // post-reveal: highlight partner
@@ -3083,10 +3093,18 @@ function showHistorySnapshot(historyIdx) {
     el.innerHTML = `<span class="card-label">${sc.word.toUpperCase()}</span>`;
     el.addEventListener('click', () => {}); // no-op while browsing history
     if (isMobile) {
-      let touchStartTime = 0;
-      el.addEventListener('touchstart', () => { touchStartTime = Date.now(); }, { passive: true });
+      let touchX = 0, touchY = 0, touchMoved = false;
+      el.addEventListener('touchstart', (e) => {
+        touchMoved = false;
+        touchX = e.touches[0].clientX;
+        touchY = e.touches[0].clientY;
+      }, { passive: true });
+      el.addEventListener('touchmove', (e) => {
+        if (Math.abs(e.touches[0].clientX - touchX) > 10 ||
+            Math.abs(e.touches[0].clientY - touchY) > 10) touchMoved = true;
+      }, { passive: true });
       el.addEventListener('touchend', (e) => {
-        if (Date.now() - touchStartTime <= 200) {
+        if (!touchMoved) {
           e.preventDefault();
           onRevealCardTap(i, true);
         }
