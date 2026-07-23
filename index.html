@@ -1927,13 +1927,16 @@
 // with the next day's version is how a new game is released.
 let serverGame = null; // day number read from Boards.json
 
+let _boardsCache = null;
 async function fetchBoards() {
+  if (_boardsCache) { serverGame = _boardsCache.day; return _boardsCache.boards; }
   const r = await fetch('Boards.json', { cache: 'no-store' });
   if (!r.ok) throw new Error('HTTP ' + r.status);
   const j = await r.json();
   const day = j && (j.day || j.game);
   if (!day || !Array.isArray(j.boards) || j.boards.length !== BOARDS_PER_DAY) throw new Error('bad Boards.json');
   serverGame = day;
+  _boardsCache = { day: day, boards: j.boards };
   return j.boards;
 }
 
@@ -2378,7 +2381,30 @@ window.addEventListener('load', () => {
   isMobile = checkMobile();
   if (isMobile) { calcMobileLayout(); applyMobileLayout(); }
   updatePortraitOverlay();
+  refreshStartButtonLabel();
 });
+
+// If today's game is already completed on this device, the title button
+// says SEE RESULTS instead of PLAY. Requires knowing the day number, so it
+// fetches Boards.json quietly in the background (falling back to PLAY).
+async function refreshStartButtonLabel() {
+  const btn = document.getElementById('startBtn');
+  if (!btn) return;
+  try {
+    await fetchBoards(); // sets serverGame; result cached for the real start
+    if (localStorage.getItem('completedGame') === String(serverGame)) {
+      btn.textContent = 'SEE RESULTS';
+      startBtnMode = 'results';
+    } else {
+      btn.textContent = 'PLAY';
+      startBtnMode = 'play';
+    }
+  } catch(e) {
+    btn.textContent = 'PLAY';
+    startBtnMode = 'play';
+  }
+}
+let startBtnMode = 'play';
 
 
 
