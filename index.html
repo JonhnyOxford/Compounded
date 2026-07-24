@@ -2610,6 +2610,14 @@ function onCardClick(idx) {
   if (card.matched) {
     if (gameOver) return;
 
+    // Tapping a matched card interrupts an in-progress pairing —
+    // clear the selected unmatched word and its display.
+    if (selectedCard !== null) {
+      cards[selectedCard].el.classList.remove('selected');
+      selectedCard = null;
+      clearWordDisplay();
+    }
+
     // If this card or its partner is already selected for unpairing
     if (selectedForUnpair !== null) {
       const selCard = cards[selectedForUnpair];
