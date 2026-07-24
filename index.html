@@ -2600,6 +2600,7 @@ function cancelUnpairSelection() {
   card.el.classList.remove('unpair-selected', 'pair-hover');
   if (partner) partner.el.classList.remove('unpair-selected', 'pair-hover');
   selectedForUnpair = null;
+  clearWordDisplay();
 }
 
 function onCardClick(idx) {
@@ -2658,6 +2659,12 @@ function onCardClick(idx) {
     selectedForUnpair = idx;
     card.el.classList.add('pair-hover', 'unpair-selected');
     partner.el.classList.add('pair-hover');
+    // Show the compound in its true order (panelA = first-clicked = left word),
+    // so the player is reminded which way round they matched it.
+    const logEntry = matchLog.find(m => m.panelA === idx || m.panelB === idx);
+    if (logEntry) {
+      showWordDisplay(cards[logEntry.panelA].word, cards[logEntry.panelB].word, 'preview');
+    }
     return;
   }
 
@@ -2728,6 +2735,10 @@ function showWordDisplay(word1, word2, correct) {
   if (word2 === null) {
     // First word only — show it, no colour, stays until second click
     text.textContent = word1;
+  } else if (correct === 'preview') {
+    // Matched-pair reminder — show the compound in its true order and hold it
+    // (no colour flash, no auto-fade) until the selection is resolved.
+    text.textContent = word1 + word2;
   } else {
     // Both words — show combined, colour, then fade text after 0.5s
     text.textContent = word1 + word2;
