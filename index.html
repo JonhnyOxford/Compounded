@@ -2065,16 +2065,37 @@ const GRID_TOP  = 209.21;
 // ── Mobile landscape layout — dynamically fills the viewport ──
 function checkMobile() {
   const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-  return isTouchDevice && window.innerWidth <= 1024 && window.innerWidth > window.innerHeight;
+  const { vw, vh } = readViewport();
+  return isTouchDevice && vw <= 1024 && vw > vh;
 }
 
 let isMobile = checkMobile();
 
 let mob = {}; // holds all calculated mobile layout values
 
+// Read the true viewport size, independent of any inline sizing we've applied
+// to <html>/<body>. Some browsers (e.g. Samsung Internet) return a polluted
+// window.innerWidth/Height once those elements have fixed pixel sizes, which
+// makes the layout grow on each rotation — so we clear our own styles first
+// and prefer visualViewport where available.
+function readViewport() {
+  const de = document.documentElement, b = document.body;
+  // Clear any sizing we previously wrote, so the measurement is of the real viewport
+  de.style.width = ''; de.style.height = '';
+  b.style.width = ''; b.style.height = '';
+  let vw, vh;
+  if (window.visualViewport) {
+    vw = Math.round(window.visualViewport.width);
+    vh = Math.round(window.visualViewport.height);
+  } else {
+    vw = window.innerWidth;
+    vh = window.innerHeight;
+  }
+  return { vw, vh };
+}
+
 function calcMobileLayout() {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
+  const { vw, vh } = readViewport();
 
   const GAP_X     = 13.51; // same as desktop for consistency
   const GAP_Y     = 13.0;
@@ -2343,7 +2364,8 @@ function resetDesktopLayout() {
 
 function updatePortraitOverlay() {
   const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-  const isPortrait = window.innerHeight > window.innerWidth;
+  const { vw, vh } = readViewport();
+  const isPortrait = vh > vw;
   const overlay = document.getElementById('portraitOverlay');
   if (overlay) overlay.classList.toggle('visible', isTouch && isPortrait);
 }
@@ -2361,7 +2383,7 @@ function handleLayoutChange() {
 function handleRotation() {
   let lastW = 0, lastH = 0, stable = 0;
   function check() {
-    const w = window.innerWidth, h = window.innerHeight;
+    const { vw: w, vh: h } = readViewport();
     if (w === lastW && h === lastH) {
       stable++;
       if (stable >= 3) { handleLayoutChange(); return; } // dimensions stable for 3 frames
