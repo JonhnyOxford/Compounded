@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Viewport Diagnostic</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #0f0f19; color: #ebebf0; font-family: monospace; }
+  body { padding: 12px; }
+  h1 { font-size: 15px; color: #f59e0b; margin-bottom: 4px; }
+  .hint { font-size: 11px; color: #888; margin-bottom: 12px; line-height: 1.4; }
+  .orient { font-size: 20px; font-weight: bold; margin-bottom: 10px; }
+  .orient.landscape { color: #3ec641; }
+  .orient.portrait  { color: #e84a4a; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  td { padding: 5px 6px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+  td.label { color: #9aa; }
+  td.val { text-align: right; font-weight: bold; }
+  .log { margin-top: 14px; font-size: 11px; }
+  .log h2 { font-size: 12px; color: #f59e0b; margin-bottom: 4px; }
+  #logrows div { padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,0.07); color: #bcc; }
+  .buttons { margin-top: 14px; }
+  button {
+    background: #222230; color: #ebebf0; border: 1px solid #444;
+    padding: 8px 14px; font-family: monospace; font-size: 13px; border-radius: 6px; margin-right: 8px;
+  }
+</style>
+</head>
+<body>
+  <h1>Viewport Diagnostic</h1>
+  <div class="hint">
+    Rotate the phone slowly: landscape → portrait → landscape, a few times.
+    Tap "Log now" at each orientation. Then screenshot the whole page (or read the numbers out).
+  </div>
+
+  <div class="orient" id="orient">—</div>
+
+  <table>
+    <tr><td class="label">window.innerWidth</td><td class="val" id="iw">–</td></tr>
+    <tr><td class="label">window.innerHeight</td><td class="val" id="ih">–</td></tr>
+    <tr><td class="label">visualViewport.width</td><td class="val" id="vvw">–</td></tr>
+    <tr><td class="label">visualViewport.height</td><td class="val" id="vvh">–</td></tr>
+    <tr><td class="label">documentElement.clientWidth</td><td class="val" id="dcw">–</td></tr>
+    <tr><td class="label">documentElement.clientHeight</td><td class="val" id="dch">–</td></tr>
+    <tr><td class="label">screen.width</td><td class="val" id="sw">–</td></tr>
+    <tr><td class="label">screen.height</td><td class="val" id="sh">–</td></tr>
+    <tr><td class="label">devicePixelRatio</td><td class="val" id="dpr">–</td></tr>
+    <tr><td class="label">visualViewport.scale</td><td class="val" id="vvs">–</td></tr>
+  </table>
+
+  <div class="buttons">
+    <button id="logBtn">Log now</button>
+    <button id="clearBtn">Clear log</button>
+  </div>
+
+  <div class="log">
+    <h2>Log (most recent first)</h2>
+    <div id="logrows"></div>
+  </div>
+
+<script>
+  function readAll() {
+    var vv = window.visualViewport;
+    return {
+      iw: window.innerWidth,
+      ih: window.innerHeight,
+      vvw: vv ? Math.round(vv.width) : 'n/a',
+      vvh: vv ? Math.round(vv.height) : 'n/a',
+      dcw: document.documentElement.clientWidth,
+      dch: document.documentElement.clientHeight,
+      sw: window.screen ? window.screen.width : 'n/a',
+      sh: window.screen ? window.screen.height : 'n/a',
+      dpr: window.devicePixelRatio || 'n/a',
+      vvs: vv && vv.scale ? Math.round(vv.scale * 1000) / 1000 : 'n/a'
+    };
+  }
+
+  function refresh() {
+    var d = readAll();
+    for (var k in d) {
+      var el = document.getElementById(k);
+      if (el) el.textContent = d[k];
+    }
+    var portrait = d.ih > d.iw;
+    var o = document.getElementById('orient');
+    o.textContent = portrait ? 'PORTRAIT' : 'LANDSCAPE';
+    o.className = 'orient ' + (portrait ? 'portrait' : 'landscape');
+  }
+
+  function logNow() {
+    var d = readAll();
+    var portrait = d.ih > d.iw;
+    var line = (portrait ? 'P' : 'L') +
+      ' | inner ' + d.iw + '×' + d.ih +
+      ' | vv ' + d.vvw + '×' + d.vvh +
+      ' | client ' + d.dcw + '×' + d.dch +
+      ' | scale ' + d.vvs;
+    var row = document.createElement('div');
+    row.textContent = line;
+    var box = document.getElementById('logrows');
+    box.insertBefore(row, box.firstChild);
+  }
+
+  document.getElementById('logBtn').addEventListener('click', logNow);
+  document.getElementById('clearBtn').addEventListener('click', function () {
+    document.getElementById('logrows').innerHTML = '';
+  });
+
+  // Live-update the top table on any change
+  window.addEventListener('resize', refresh);
+  window.addEventListener('orientationchange', function () { setTimeout(refresh, 300); });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', refresh);
+    window.visualViewport.addEventListener('scroll', refresh);
+  }
+  refresh();
+  // Auto-log the initial state
+  logNow();
+</script>
+</body>
+</html>
