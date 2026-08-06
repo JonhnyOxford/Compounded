@@ -2065,16 +2065,27 @@ const GRID_TOP  = 209.21;
 // ── Mobile landscape layout — dynamically fills the viewport ──
 function checkMobile() {
   const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-  return isTouchDevice && window.innerWidth <= 1024 && window.innerWidth > window.innerHeight;
+  return isTouchDevice && vpWidth() <= 1024 && vpWidth() > vpHeight();
 }
 
 let isMobile = checkMobile();
 
 let mob = {}; // holds all calculated mobile layout values
 
+// ── Viewport measurement ──────────────────────────────────────────────────────
+// Height is read from documentElement.clientHeight rather than innerHeight:
+// both agree on Chrome/Safari, but on Samsung Internet innerHeight/visualViewport
+// include the toolbar area and shift across rotations, while clientHeight tracks
+// the true laid-out space. Using it fixes the "layout grows on rotate" bug.
+function vpWidth()  { return window.innerWidth; }
+function vpHeight() {
+  const c = document.documentElement.clientHeight;
+  return (c && c > 0) ? c : window.innerHeight;
+}
+
 function calcMobileLayout() {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
+  const vw = vpWidth();
+  const vh = vpHeight();
 
   const GAP_X     = 13.51; // same as desktop for consistency
   const GAP_Y     = 13.0;
@@ -2343,7 +2354,7 @@ function resetDesktopLayout() {
 
 function updatePortraitOverlay() {
   const isTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
-  const isPortrait = window.innerHeight > window.innerWidth;
+  const isPortrait = vpHeight() > vpWidth();
   const overlay = document.getElementById('portraitOverlay');
   if (overlay) overlay.classList.toggle('visible', isTouch && isPortrait);
 }
@@ -2361,7 +2372,7 @@ function handleLayoutChange() {
 function handleRotation() {
   let lastW = 0, lastH = 0, stable = 0;
   function check() {
-    const w = window.innerWidth, h = window.innerHeight;
+    const w = vpWidth(), h = vpHeight();
     if (w === lastW && h === lastH) {
       stable++;
       if (stable >= 3) { handleLayoutChange(); return; } // dimensions stable for 3 frames
@@ -3570,6 +3581,9 @@ function onFullscreenChange() {
     icon.querySelector('.fs-expand').style.display = isFS ? 'none' : '';
     icon.querySelector('.fs-shrink').style.display = isFS ? '' : 'none';
   }
+  // Fullscreen changes the usable height (toolbar shows/hides) — re-fit the
+  // layout explicitly rather than relying on an incidental resize event.
+  handleRotation();
 }
 document.addEventListener('fullscreenchange', onFullscreenChange);
 document.addEventListener('webkitfullscreenchange', onFullscreenChange);
