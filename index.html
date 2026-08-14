@@ -2385,6 +2385,30 @@ function handleLayoutChange() {
   if (isMobile) { calcMobileLayout(); applyMobileLayout(); }
   else if (wasMobile) resetDesktopLayout();
   updatePortraitOverlay();
+  maybeShowFirstVisitRules();
+}
+
+// First-visit onboarding: open the rules once for any browser without the
+// 'hasVisited' flag. Only fires when the title screen is actually visible —
+// i.e. not while the portrait "rotate your screen" overlay is showing — so on
+// mobile it appears once the player rotates to landscape. Sets the flag so it
+// never repeats for that browser (private windows have fresh storage, so they
+// see it each new session, as intended).
+let firstVisitRulesShown = false;
+function maybeShowFirstVisitRules() {
+  if (firstVisitRulesShown) return;
+  try {
+    if (localStorage.getItem('hasVisited')) return;
+  } catch(e) { return; }
+  // Don't show while the portrait overlay covers the screen, or if the player
+  // has already left the title screen into a game.
+  const portrait = document.getElementById('portraitOverlay');
+  if (portrait && portrait.classList.contains('visible')) return;
+  const startOverlay = document.getElementById('startOverlay');
+  if (!startOverlay || !startOverlay.classList.contains('visible')) return;
+  firstVisitRulesShown = true;
+  try { localStorage.setItem('hasVisited', '1'); } catch(e) {}
+  openRules();
 }
 
 // Wait for viewport dimensions to stabilise after rotation before applying layout.
@@ -2412,6 +2436,7 @@ window.addEventListener('load', () => {
   if (isMobile) { calcMobileLayout(); applyMobileLayout(); }
   updatePortraitOverlay();
   refreshStartButtonLabel();
+  maybeShowFirstVisitRules();
 });
 
 // If today's game is already completed on this device, the title button
@@ -2612,15 +2637,11 @@ function onCardHover(idx, entering) {
 // ── Card click ────────────────────────────────────────────────────────────────
 // ── Check if player is at a dead end (1 life + no valid pairs remaining) ──────
 function checkDeadEnd() {
-  if (lives !== 1) return;
-  const unmatched = cards.filter(c => !c.matched).map(c => c.word);
-  for (let i = 0; i < unmatched.length; i++) {
-    for (let j = 0; j < unmatched.length; j++) {
-      if (i !== j && isValidPair(unmatched[i], unmatched[j])) return; // valid pair exists
-    }
-  }
-  // No valid pairs left and only 1 life — end game automatically
-  endGame(false);
+  // Previously: if the player had 1 life left and no valid pairs remained, the
+  // game ended automatically (since any unmatch/wrong guess would lose the last
+  // life anyway). Players found this confusing, so the game no longer ends here —
+  // it now ends only when the player actually makes a wrong guess or unmatches.
+  return;
 }
 
 function cancelUnpairSelection() {
