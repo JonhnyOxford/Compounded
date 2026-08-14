@@ -1051,6 +1051,25 @@
     pointer-events: none;
     transition: opacity 0.4s;
   }
+  .hint-btn-wrap {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .hint-btn-wrap.playing {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .btn-hint[disabled] {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
+  }
+  .card.matched.hint-trap {
+    background: #8d8039 !important;
+  }
+  .card.matched.hint-trap.pair-hover {
+    background: #a08f42 !important;
+  }
   .end-btn-wrap.visible {
     opacity: 1;
     pointer-events: all;
@@ -1914,6 +1933,11 @@
   <div class="success-text" id="successText"></div>
   <div class="intro-text" id="introText"></div>
 
+  <!-- Hint button — visible during play, occupies the same spot as the end button -->
+  <div class="end-btn-wrap hint-btn-wrap" id="hintBtnWrap">
+    <button class="btn-play btn-hint" id="hintBtn" disabled>HINT</button>
+  </div>
+
   <!-- Next board button — appears after reveal animation -->
   <div class="end-btn-wrap" id="endBtnWrap">
     <button class="btn-play" id="nextBtn">NEXT BOARD</button>
@@ -2019,7 +2043,8 @@ function advanceBoardIndex() {
       localStorage.setItem('lastDayShare', JSON.stringify({
         game: serverGame,
         results: getDayResults(),
-        lives: JSON.parse(localStorage.getItem('dayLives') || '[]')
+        lives: JSON.parse(localStorage.getItem('dayLives') || '[]'),
+        hints: JSON.parse(localStorage.getItem('dayHints') || '[]')
       }));
     } catch(e) {}
     localStorage.setItem('completedGame', String(serverGame));
@@ -2045,7 +2070,9 @@ function saveBoardProgress() {
       lives: lives,
       matchLog: matchLog,
       dayCompoundsMade: dayCompoundsMade,
-      boardHistory: boardHistory
+      boardHistory: boardHistory,
+      hintUsedThisBoard: hintUsedThisBoard,
+      hintedTrapKeys: Array.from(hintedTrapKeys)
     }));
   } catch(e) {}
 }
@@ -2060,6 +2087,19 @@ function loadBoardProgress() {
 
 function clearBoardProgress() {
   localStorage.removeItem(INPROGRESS_KEY);
+}
+
+// ── Solution-pair lookup (to distinguish traps from correct matches) ──────────
+let solutionPairKeys = new Set();
+function buildSolutionPairKeys(solution) {
+  solutionPairKeys = new Set();
+  (solution || []).forEach(([a, b]) => {
+    solutionPairKeys.add(a + '|' + b);
+    solutionPairKeys.add(b + '|' + a);
+  });
+}
+function isSolutionPair(w1, w2) {
+  return solutionPairKeys.has(w1 + '|' + w2);
 }
 
 // ── Valid pair lookup ─────────────────────────────────────────────────────────
@@ -2284,13 +2324,15 @@ function applyMobileLayout() {
   });
 
   // End button: bottom-right of right panel, with gap G on all sides matching board bottom gap
-  const ebw = document.getElementById('endBtnWrap');
-  if (ebw) {
-    ebw.style.bottom = mob.BTN_BOTTOM + 'px';
-    ebw.style.left   = 'auto';
-    ebw.style.right  = mob.G + 'px';
-    ebw.style.width  = (vw - mob.DIVIDER_X - 2 * mob.G) + 'px';
-  }
+  ['endBtnWrap','hintBtnWrap'].forEach(id => {
+    const ebw = document.getElementById(id);
+    if (ebw) {
+      ebw.style.bottom = mob.BTN_BOTTOM + 'px';
+      ebw.style.left   = 'auto';
+      ebw.style.right  = mob.G + 'px';
+      ebw.style.width  = (vw - mob.DIVIDER_X - 2 * mob.G) + 'px';
+    }
+  });
 
   // History nav: bottom of grid area
   const histPrev = document.getElementById('historyPrev');
@@ -2474,6 +2516,8 @@ let cards = [];
 let currentBoard = null;
 let matchLog = [];
 let dayCompoundsMade = 0; // total compounds matched across all boards in current day
+let hintUsedThisBoard = false;   // has the Hint button been spent on the current board
+let hintedTrapKeys = new Set();  // pair-keys (word|word) recoloured gold by the hint, persist until unmatched
 let boardHistory = []; // snapshots of each completed board this day, for Prev/Next browsing
 let viewingHistoryIndex = null; // null = live/current board; otherwise index into boardHistory
 
@@ -2685,13 +2729,16 @@ function onCardClick(idx) {
         const c = cards[firstIdx];
         const p = cards[idx];
         matchLog = matchLog.filter(m => m.panelA !== firstIdx && m.panelB !== firstIdx);
+        // If this pair was gold-flagged by a hint, clear that flag as it's now unmatched
+        hintedTrapKeys.delete(pairKey(c.word, p.word));
         c.matched = false; p.matched = false;
         c.partnerId = null; p.partnerId = null;
-        c.el.classList.remove('matched', 'pair-hover', 'unpair-selected', 'unpair-confirming');
-        p.el.classList.remove('matched', 'pair-hover', 'unpair-selected', 'unpair-confirming');
+        c.el.classList.remove('matched', 'pair-hover', 'unpair-selected', 'unpair-confirming', 'hint-trap');
+        p.el.classList.remove('matched', 'pair-hover', 'unpair-selected', 'unpair-confirming', 'hint-trap');
         lives--;
         updateLives();
         clearWordDisplay();
+        refreshHintButton();
         saveBoardProgress();
         if (lives <= 0) endGame(false);
         else checkDeadEnd();
@@ -2751,6 +2798,7 @@ function onCardClick(idx) {
       matchLog.push({ order: matchLog.length + 1, panelA: selectedCard, panelB: idx, word: compound });
       showWordDisplay(first.word, second.word, true);
       selectedCard = null;
+      refreshHintButton();
       saveBoardProgress();
       if (cards.every(c => c.matched)) endGame(true);
       else checkDeadEnd();
@@ -2893,6 +2941,11 @@ function revealBoard(isLastBoard, boardInDay) {
 
   lastRevealOrdered = ordered; // save for repositioning after fullscreen toggle
 
+  // Remember which cards were gold-flagged (trap) before the reveal rearranges pairs,
+  // so the gold colour can persist on those individual cards afterwards.
+  const goldCardWords = new Set();
+  cards.forEach(c => { if (c.el.classList.contains('hint-trap')) goldCardWords.add(c.word); });
+
   // ── Animate ───────────────────────────────────────────────────────────────
   cards.forEach(c => {
     c.el.classList.add('revealing');
@@ -2928,6 +2981,9 @@ function revealBoard(isLastBoard, boardInDay) {
           cardB.el.classList.add('revealed-missed');
         }
       }
+      // Persist gold on cards that were flagged as traps by the hint
+      if (goldCardWords.has(cardA.word)) { cardA.el.classList.remove('revealed-missed'); cardA.el.classList.add('matched','hint-trap'); }
+      if (goldCardWords.has(cardB.word)) { cardB.el.classList.remove('revealed-missed'); cardB.el.classList.add('matched','hint-trap'); }
     }, pairIndex * 80);
   });
 
@@ -2981,6 +3037,7 @@ async function startGame() {
   const st = document.getElementById('successText');
   st.classList.remove('show');
   document.getElementById('endBtnWrap').classList.remove('visible');
+  document.getElementById('hintBtnWrap').classList.remove('playing');
 
   let dayBoards = null;
   try { dayBoards = await fetchBoards(); } catch(e) { dayBoards = null; }
@@ -2995,6 +3052,7 @@ async function startGame() {
     setBoardInDay(0);
     setDayResults([]);
     localStorage.removeItem('dayLives');
+    localStorage.removeItem('dayHints');
     localStorage.removeItem('completedGame');
     localStorage.removeItem('completedDayHistory');
     clearBoardProgress();
@@ -3015,6 +3073,7 @@ async function startGame() {
       const btn = document.getElementById('nextBtn');
       if (btn) btn.textContent = 'VIEW RESULTS';
       document.getElementById('endBtnWrap').classList.add('visible');
+      refreshHintButton(); // ensure the hint button stays hidden in the browse view
     } else {
       showDayCompleteMessage(); // fallback: day was completed before this feature existed
     }
@@ -3036,6 +3095,10 @@ async function startGame() {
   hideHistoryNav();
 
   buildRoundValidPairs(currentBoard.pairs);
+  buildSolutionPairKeys(currentBoard.solution);
+  // Reset per-board hint state (may be overwritten by restore below)
+  hintUsedThisBoard = false;
+  hintedTrapKeys = new Set();
 
   // Resume an in-progress board if one was saved for this exact board (e.g. tab closed/refreshed mid-board)
   const saved = loadBoardProgress();
@@ -3048,8 +3111,12 @@ async function startGame() {
     matchLog = saved.matchLog;
     dayCompoundsMade = saved.dayCompoundsMade;
     boardHistory = saved.boardHistory;
+    hintUsedThisBoard = !!saved.hintUsedThisBoard;
+    hintedTrapKeys = new Set(Array.isArray(saved.hintedTrapKeys) ? saved.hintedTrapKeys : []);
     updateLives();
     buildGrid(saved.words, saved);
+    applyHintColours();
+    refreshHintButton();
     if (lives <= 0) {
       // Tab/browser closed before the loss could be finalised — finish it now instead of resuming an over board
       endGame(false);
@@ -3067,6 +3134,7 @@ async function startGame() {
   }
 
   buildGrid(shuffle(currentBoard.words));
+  refreshHintButton();
 
   // Show "BOARD N" intro text, same animation style as "BOARD COMPLETE"
   const it = document.getElementById('introText');
@@ -3076,9 +3144,83 @@ async function startGame() {
   it.classList.add('show');
 }
 
+// ── Hint feature ──────────────────────────────────────────────────────────────
+// A pair-key that is order-independent, matching how a matched pair is stored.
+function pairKey(w1, w2) { return [w1, w2].sort().join('|'); }
+
+// Which matched pairs are traps (valid, but not part of the solution)?
+function currentTrapPairs() {
+  const traps = [];
+  const seen = new Set();
+  matchLog.forEach(m => {
+    const a = cards[m.panelA] ? cards[m.panelA].word : null;
+    const b = cards[m.panelB] ? cards[m.panelB].word : null;
+    if (!a || !b) return;
+    if (!isSolutionPair(a, b)) {
+      const k = pairKey(a, b);
+      if (!seen.has(k)) { seen.add(k); traps.push([m.panelA, m.panelB, k]); }
+    }
+  });
+  return traps;
+}
+
+// Repaint any currently-matched cards whose pair-key is in hintedTrapKeys.
+function applyHintColours() {
+  cards.forEach(c => {
+    if (c.matched && c.partnerId !== null) {
+      const partner = cards[c.partnerId];
+      if (partner && hintedTrapKeys.has(pairKey(c.word, partner.word))) {
+        c.el.classList.add('hint-trap');
+      }
+    }
+  });
+}
+
+// Enable/disable and grey the Hint button according to state.
+function refreshHintButton() {
+  const btn = document.getElementById('hintBtn');
+  const wrap = document.getElementById('hintBtnWrap');
+  if (!btn || !wrap) return;
+  // Visible only while a board is actively being played (not on the title screen,
+  // not during the reveal/results, not in the completed-day browse view).
+  const inPlay = !gameOver && cards.length > 0 &&
+    !document.getElementById('startOverlay').classList.contains('visible');
+  wrap.classList.toggle('playing', inPlay);
+  const anyMatch = matchLog.length > 0;
+  // Disabled until at least one match is made, or once used this board.
+  btn.disabled = hintUsedThisBoard || !anyMatch;
+}
+
+function useHint() {
+  if (hintUsedThisBoard || gameOver) return;
+  if (matchLog.length === 0) return; // button shouldn't be enabled, but guard anyway
+  hintUsedThisBoard = true;
+  // Recolour every current trap pair
+  currentTrapPairs().forEach(([idxA, idxB, k]) => {
+    hintedTrapKeys.add(k);
+    if (cards[idxA]) cards[idxA].el.classList.add('hint-trap');
+    if (cards[idxB]) cards[idxB].el.classList.add('hint-trap');
+  });
+  // Mark that a hint was used somewhere in this day (for results/share asterisks)
+  markHintUsedForDay(getBoardInDay());
+  refreshHintButton();
+  saveBoardProgress();
+}
+
+// Record, per day, which boards used a hint (index 0..2). Persisted for results/share.
+function markHintUsedForDay(boardInDay) {
+  try {
+    let arr = JSON.parse(localStorage.getItem('dayHints') || '[]');
+    if (!Array.isArray(arr)) arr = [];
+    arr[boardInDay] = true;
+    localStorage.setItem('dayHints', JSON.stringify(arr));
+  } catch(e) {}
+}
+
 function endGame(won) {
   locked = true;
   gameOver = true;
+  refreshHintButton(); // hides the hint button now the board is over
   clearBoardProgress(); // this board is finished — its data now lives in boardHistory/dayResults instead
 
   // Count compounds made this board and add to day total
@@ -3491,6 +3633,7 @@ function jumpToDay(d) {
   setBoardInDay(0);
   setDayResults([]);
   localStorage.removeItem('dayLives');
+  localStorage.removeItem('dayHints');
   hideBoardInput();
   locked = false;
   gameOver = false;
@@ -3555,7 +3698,10 @@ function openResults() {
   }
 
   // Stats
-  document.getElementById('resultsBoardsVal').textContent = `${wonCount} / ${BOARDS_PER_DAY}`;
+  let hintsArr = [];
+  try { hintsArr = JSON.parse(localStorage.getItem('dayHints') || '[]'); } catch(e) {}
+  const anyHint = Array.isArray(hintsArr) && hintsArr.some(Boolean);
+  document.getElementById('resultsBoardsVal').textContent = `${wonCount} / ${BOARDS_PER_DAY}` + (anyHint ? ' *' : '');
   document.getElementById('resultsCompoundsVal').textContent = `${dayCompoundsMade} / ${BOARDS_PER_DAY * 8}`;
 
   document.getElementById('resultsBackdrop').classList.add('visible');
@@ -3585,6 +3731,9 @@ document.getElementById('startBtn').addEventListener('click', () => {
 });
 document.getElementById('startRulesBtn').addEventListener('click', () => {
   openRules();
+});
+document.getElementById('hintBtn').addEventListener('click', () => {
+  useHint();
 });
 document.getElementById('nextBtn').addEventListener('click', () => {
   if (document.getElementById('nextBtn').textContent === 'VIEW RESULTS') {
@@ -3762,10 +3911,13 @@ function buildShareText() {
   const results = (snap && Array.isArray(snap.results)) ? snap.results : getDayResults();
   let livesArr = (snap && Array.isArray(snap.lives)) ? snap.lives : [];
   if (!livesArr.length) { try { livesArr = JSON.parse(localStorage.getItem('dayLives') || '[]'); } catch(e) {} }
+  let hintsArr = (snap && Array.isArray(snap.hints)) ? snap.hints : [];
+  if (!hintsArr.length) { try { hintsArr = JSON.parse(localStorage.getItem('dayHints') || '[]'); } catch(e) {} }
   const lines = results.map((won, i) => {
-    if (!won) return '\u{1F7E5}'; // red square
+    const star = hintsArr[i] ? ' *' : '';
+    if (!won) return '\u{1F7E5}' + star; // red square
     const hearts = (livesArr[i] > 0) ? ' ' + '\u2764\uFE0F'.repeat(livesArr[i]) : '';
-    return '\u{1F7E9}' + hearts;  // green square + remaining lives
+    return '\u{1F7E9}' + hearts + star;  // green square + remaining lives (+ hint asterisk)
   });
   return `Compounded #${displayDay}\n${dateStr}\n` + lines.join('\n');
 }
