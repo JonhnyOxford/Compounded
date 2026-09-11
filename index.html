@@ -486,22 +486,23 @@
 
   /* ── Board indicator pill ── */
   .board-pill {
+    /* Same vertical band as the word display and lives box, so the game
+       number sits on the same centre line as the hearts opposite. */
     position: absolute;
     left: 255.7px;
-    top: 105px;
+    top: 96.98px;
     width: 165px;
+    height: 78.58px;
     background: transparent;
     border: none;
     border-radius: 0;
-    padding: 12px 14px 12px 0;
+    padding: 0;
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
+    align-items: center;
+    justify-content: flex-start;
     z-index: 10;
-    cursor: pointer;
+    cursor: default;
   }
-  .board-pill:hover .board-pill-text { color: rgba(255,255,255,0.7); }
   .board-pill-text {
     font-size: 18px;
     font-weight: 700;
@@ -694,10 +695,6 @@
   }
   [data-theme="light"] .board-pill-text {
     color: var(--text);
-  }
-  [data-theme="light"] .board-pill:hover .board-pill-text {
-    color: var(--text);
-    opacity: 0.7;
   }
   [data-theme="light"] .btn-play {
     border-color: var(--text);
@@ -1581,7 +1578,6 @@
     }
 
     /* Board pill and hearts: sizes set dynamically by JS based on 75% of card width */
-    .board-pill { padding: 0; gap: 6px; }
     .board-pill-text { white-space: nowrap; }
     .heart.lost { transform: scale(1); }
 
@@ -2259,13 +2255,13 @@ function applyMobileLayout() {
   if (bp) {
     const panelW = mob.CARD_W * 0.75;
     const pillFontSize = Math.round(panelW * 0.14); // scales with panel width
-    const pipW = Math.round(panelW * 0.28);
-    bp.style.left  = mob.GRID_LEFT + 'px';
-    bp.style.width = panelW + 'px';
-    bp.style.top   = Math.round(mob.HEADER_MID_Y - 19) + 'px';
+    bp.style.left   = mob.GRID_LEFT + 'px';
+    bp.style.width  = panelW + 'px';
+    // Height = text line, centred on the same mid-line as the hearts
+    bp.style.height = pillFontSize + 'px';
+    bp.style.top    = Math.round(mob.HEADER_MID_Y - pillFontSize / 2) + 'px';
     const pillText = bp.querySelector('.board-pill-text');
     if (pillText) pillText.style.fontSize = pillFontSize + 'px';
-    bp.querySelectorAll('.board-pip').forEach(p => { p.style.width = pipW + 'px'; });
   }
 
   // Lives box: flush right with grid, vertically centred on word display
