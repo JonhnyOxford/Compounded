@@ -2032,7 +2032,8 @@ function advanceBoardIndex() {
         game: serverGame,
         results: getDayResults(),
         lives: JSON.parse(localStorage.getItem('dayLives') || '[]'),
-        hints: JSON.parse(localStorage.getItem('dayHints') || '[]')
+        hints: JSON.parse(localStorage.getItem('dayHints') || '[]'),
+        compounds: dayCompoundsMade
       }));
     } catch(e) {}
     localStorage.setItem('completedGame', String(serverGame));
@@ -3471,6 +3472,21 @@ function returnToLiveReveal() {
 
 // ── Stats ─────────────────────────────────────────────────────────────────────
 const STATS_KEY = 'compoundWordStats';
+const STATS_VERSION_KEY = 'statsVersion';
+const STATS_VERSION = '2'; // bumped for the single-game relaunch at Game 001
+
+// One-time stats reset for the relaunch. Stats recorded under the old 3-board
+// format measured different things (a "win" meant completing all three boards),
+// so they are cleared once per browser and counting restarts from Game 001.
+// The version flag makes this fire at most once, ever.
+(function resetStatsForRelaunch() {
+  try {
+    if (localStorage.getItem(STATS_VERSION_KEY) !== STATS_VERSION) {
+      localStorage.removeItem(STATS_KEY);
+      localStorage.setItem(STATS_VERSION_KEY, STATS_VERSION);
+    }
+  } catch(e) {}
+})();
 
 function loadStats() {
   try {
@@ -3517,12 +3533,7 @@ function recordGameResult(won) {
 function renderStats() {
   const s = loadStats();
   const gamesPlayed = s.gamesPlayed || 0;
-  // Migration: derive wins from the old 3-board distribution for existing players
-  let gamesWon = s.gamesWon;
-  if (typeof gamesWon !== 'number') {
-    const legacy = s.boardsPerGame || {};
-    gamesWon = (legacy['perfect'] || 0) + (legacy[3] || 0);
-  }
+  const gamesWon = s.gamesWon || 0;
   document.getElementById('statGamesPlayed').textContent = gamesPlayed;
   const gameWinPct = gamesPlayed > 0 ? Math.round(gamesWon / gamesPlayed * 100) : 0;
   document.getElementById('statGameWinPct').textContent = gameWinPct;
@@ -3649,8 +3660,20 @@ function openResults() {
   let livesArrRes = [];
   try { livesArrRes = JSON.parse(localStorage.getItem('dayLives') || '[]'); } catch(e) {}
   const livesLeft = (Array.isArray(livesArrRes) && livesArrRes.length > 0) ? livesArrRes[0] : 0;
-  document.getElementById('resultsBoardsVal').innerHTML = `${livesLeft}` + (anyHint ? ' <span class="hint-asterisk">*</span>' : '');
-  document.getElementById('resultsCompoundsVal').textContent = `${dayCompoundsMade} / 8`;
+  document.getElementById('resultsBoardsVal').textContent = `${livesLeft}`;
+
+  // Compounds found: prefer the completion snapshot so the figure survives a
+  // page reload (the live counter resets when the completed-day view is restored).
+  let compFound = dayCompoundsMade;
+  try {
+    const snapR = JSON.parse(localStorage.getItem('lastDayShare') || 'null');
+    if (snapR && snapR.game === serverGame && typeof snapR.compounds === 'number') {
+      compFound = snapR.compounds;
+    }
+  } catch(e) {}
+  const compEl = document.getElementById('resultsCompoundsVal');
+  compEl.innerHTML = `${compFound} / 8` + (anyHint ? ' <span class="hint-asterisk">*</span>' : '');
+  compEl.style.color = (compFound >= 8) ? '#3ec641' : '#d94344';
 
   document.getElementById('resultsBackdrop').classList.add('visible');
 }
@@ -3861,11 +3884,16 @@ function buildShareText() {
   if (!livesArr.length) { try { livesArr = JSON.parse(localStorage.getItem('dayLives') || '[]'); } catch(e) {} }
   let hintsArr = (snap && Array.isArray(snap.hints)) ? snap.hints : [];
   if (!hintsArr.length) { try { hintsArr = JSON.parse(localStorage.getItem('dayHints') || '[]'); } catch(e) {} }
+  // Compounds found this game (out of 8) — replaces the old green square
+  let found = (snap && typeof snap.compounds === 'number') ? snap.compounds : dayCompoundsMade;
+  if (typeof found !== 'number' || found < 0) found = 0;
+  if (found > 8) found = 8;
   const lines = results.map((won, i) => {
-    if (!won) return '\u{1F7E5}'; // red square — no asterisk on incomplete boards
+    const score = `${found}/8`;
+    if (!won) return '\u{1F7E5} ' + score; // red square + how many were found
     const hearts = (livesArr[i] > 0) ? ' ' + '\u2764\uFE0F'.repeat(livesArr[i]) : '';
     const star = hintsArr[i] ? ' *' : '';
-    return '\u{1F7E9}' + hearts + star;  // green square + remaining lives (+ hint asterisk)
+    return '\u{1F7E9} ' + score + hearts + star; // green square + 8/8 + lives (+ hint asterisk)
   });
   return `Compounded #${displayDay}\n${dateStr}\n` + lines.join('\n');
 }
