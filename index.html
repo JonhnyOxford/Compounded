@@ -2039,7 +2039,7 @@ function advanceBoardIndex() {
     localStorage.setItem('completedGame', String(serverGame));
     try {
       const allWon = getDayResults().every(Boolean);
-      trackEvent(allWon ? 'day-completed-won' : 'day-completed');
+      trackEvent(allWon ? 'game-won' : 'game-lost');
     } catch(e) {}
   }
 }
@@ -3579,7 +3579,11 @@ function renderStats() {
   });
 }
 
-function openStats() { renderStats(); document.getElementById('statsBackdrop').classList.add('visible'); }
+function openStats() {
+  trackEvent('stats-viewed');
+  renderStats();
+  document.getElementById('statsBackdrop').classList.add('visible');
+}
 function closeStats() { document.getElementById('statsBackdrop').classList.remove('visible'); }
 function openRules() { document.getElementById('rulesBackdrop').classList.add('visible'); }
 function closeRules() { document.getElementById('rulesBackdrop').classList.remove('visible'); }
@@ -3617,6 +3621,7 @@ function jumpToDay(d) {
 
 // ── Results modal ─────────────────────────────────────────────────────────────
 function openResults() {
+  trackEvent('results-viewed');
   const displayDay = serverGame || getCurrentDay() + 1;
   const gameNum = String(displayDay).padStart(3, '0');
 
