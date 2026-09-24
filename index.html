@@ -115,7 +115,7 @@
   .stats-icon:hover { opacity: 1; }
   .stats-icon svg { width: 22px; height: 22px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
-  /* Fullscreen icon — hidden on desktop, displayed on mobile via media query */
+  /* Fullscreen icon — hidden on desktop, shown on mobile via media query */
   .fullscreen-icon {
     display: none;
     width: 36px;
@@ -878,6 +878,11 @@
   .rules-text:last-child {
     margin-bottom: 0;
   }
+  .btn-rules-close {
+    padding: 8px 20px;
+    font-size: 13px;
+  }
+
   .rules-footer {
     margin-top: 26px;
     font-size: 12px;
@@ -1822,6 +1827,9 @@
       <div class="rules-text">Examples:<br><span class="rules-example">Firefighter <span class="yes">✓</span> - Warm-up <span class="no">X</span> - High School <span class="no">X</span> - Carpet <span class="no">X</span> - Blackpool <span class="no">X</span> - PowerPoint <span class="no">X</span></span></div>
       <div class="rules-text">Compound word validation is based on the Oxford Dictionary of English (ODE) – the same resource that is used for the Channel 4 programme Countdown.</div>
 
+      <div style="text-align:center; margin: 18px 0 4px;">
+        <button class="btn-play btn-rules-close" id="rulesCloseBtn">CLOSE THIS WINDOW</button>
+      </div>
       <div class="rules-footer">© 2026 Marcus Tolan. All rights reserved. · <a href="#" id="rulesPrivacyLink" style="color: inherit; text-decoration: underline;">Privacy</a></div>
     </div>
   </div>
@@ -2416,15 +2424,10 @@ function handleLayoutChange() {
   if (isMobile) { calcMobileLayout(); applyMobileLayout(); }
   else if (wasMobile) resetDesktopLayout();
   updatePortraitOverlay();
-  maybeShowFirstVisitRules();
 }
 
-// First-visit onboarding: open the rules once for any browser without the
-// 'hasVisited' flag. Only fires when the title screen is actually visible —
-// i.e. not while the portrait "rotate your screen" overlay is showing — so on
-// mobile it appears once the player rotates to landscape. Sets the flag so it
-// never repeats for that browser (private windows have fresh storage, so they
-// see it each new session, as intended).
+// First-visit rules auto-open is disabled — players now start on the title
+// screen and open the rules themselves. Retained (unused) in case it returns.
 let firstVisitRulesShown = false;
 function maybeShowFirstVisitRules() {
   if (firstVisitRulesShown) return;
@@ -2467,7 +2470,6 @@ window.addEventListener('load', () => {
   if (isMobile) { calcMobileLayout(); applyMobileLayout(); }
   updatePortraitOverlay();
   refreshStartButtonLabel();
-  maybeShowFirstVisitRules();
 });
 
 // If today's game is already completed on this device, the title button
@@ -3855,6 +3857,7 @@ document.getElementById('helpPrivacy').addEventListener('click', (e) => {
   openPrivacy();
 });
 document.getElementById('privacyClose').addEventListener('click', closePrivacy);
+document.getElementById('rulesCloseBtn').addEventListener('click', closeRules);
 document.getElementById('rulesPrivacyLink').addEventListener('click', (e) => {
   e.preventDefault();
   closeRules();
