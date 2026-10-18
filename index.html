@@ -1145,6 +1145,13 @@
     transition: opacity 0.3s;
   }
   .word-display-text.fading { opacity: 0; }
+  .word-display-text.already-guessed {
+    font-size: 21px;
+    font-weight: 400;
+    text-transform: none;
+    color: rgba(255,255,255,0.9);
+  }
+  [data-theme="light"] .word-display-text.already-guessed { color: rgba(20,20,28,0.9); }
   .word-display.correct   .word-display-text { color: #3ec641; }
   .word-display.incorrect .word-display-text { color: #d94344; }
 
@@ -2069,7 +2076,8 @@ function saveBoardProgress() {
       dayCompoundsMade: dayCompoundsMade,
       boardHistory: boardHistory,
       hintUsedThisBoard: hintUsedThisBoard,
-      hintedTrapKeys: Array.from(hintedTrapKeys)
+      hintedTrapKeys: Array.from(hintedTrapKeys),
+      wrongGuesses: Array.from(wrongGuesses)
     }));
   } catch(e) {}
 }
@@ -2512,6 +2520,7 @@ let cards = [];
 let currentBoard = null;
 let matchLog = [];
 let dayCompoundsMade = 0; // total compounds matched across all boards in current day
+let wrongGuesses = new Set(); // 'word1|word2' pairs already guessed wrongly this game
 let hintUsedThisBoard = false;   // has the Hint button been spent on the current board
 let hintedTrapKeys = new Set();  // pair-keys (word|word) recoloured gold by the hint, persist until unmatched
 let boardHistory = []; // snapshots of each completed board this day, for Prev/Next browsing
@@ -2799,20 +2808,32 @@ function onCardClick(idx) {
       if (cards.every(c => c.matched)) endGame(true);
       else checkDeadEnd();
     } else {
-      locked = true;
-      first.el.classList.remove('selected'); second.el.classList.remove('selected');
-      first.el.classList.add('wrong','shaking'); second.el.classList.add('wrong','shaking');
-      showWordDisplay(first.word, second.word, false);
-      lives--;
-      updateLives();
-      saveBoardProgress();
-      setTimeout(() => {
-        first.el.classList.remove('wrong','shaking');
-        second.el.classList.remove('wrong','shaking');
-        selectedCard = null; locked = false;
-        if (lives <= 0) endGame(false);
-        else checkDeadEnd();
-      }, 700);
+      const guessKey = first.word + '|' + second.word;
+      if (wrongGuesses.has(guessKey)) {
+        // Same wrong pair as before — no penalty, just a reminder
+        locked = true;
+        first.el.classList.remove('selected'); second.el.classList.remove('selected');
+        showWordDisplay(first.word, second.word, 'repeat');
+        setTimeout(() => {
+          selectedCard = null; locked = false;
+        }, 700);
+      } else {
+        wrongGuesses.add(guessKey);
+        locked = true;
+        first.el.classList.remove('selected'); second.el.classList.remove('selected');
+        first.el.classList.add('wrong','shaking'); second.el.classList.add('wrong','shaking');
+        showWordDisplay(first.word, second.word, false);
+        lives--;
+        updateLives();
+        saveBoardProgress();
+        setTimeout(() => {
+          first.el.classList.remove('wrong','shaking');
+          second.el.classList.remove('wrong','shaking');
+          selectedCard = null; locked = false;
+          if (lives <= 0) endGame(false);
+          else checkDeadEnd();
+        }, 700);
+      }
     }
   }
 }
@@ -2835,6 +2856,22 @@ function showWordDisplay(word1, word2, correct) {
     // Matched-pair reminder — show the compound in its true order and hold it
     // (no colour flash, no auto-fade) until the selection is resolved.
     text.textContent = word1 + word2;
+  } else if (correct === 'repeat') {
+    // Repeated wrong guess — no colour at all. Show the compound briefly, then
+    // replace it with a quieter "Already Guessed!" note, hold, then fade.
+    text.classList.remove('already-guessed');
+    text.textContent = word1 + word2;
+    wordDisplayTimeout = setTimeout(() => {
+      text.textContent = 'Already Guessed!';
+      text.classList.add('already-guessed');
+      wordDisplayTimeout = setTimeout(() => {
+        text.classList.add('fading');
+        wordDisplayTimeout = setTimeout(() => {
+          text.textContent = '';
+          text.classList.remove('fading','already-guessed');
+        }, 300);
+      }, 1500);
+    }, 200);
   } else {
     // Both words — show combined, colour, then fade text after 0.5s
     text.textContent = word1 + word2;
@@ -2855,7 +2892,7 @@ function clearWordDisplay() {
   const box  = document.getElementById('wordDisplay');
   const text = document.getElementById('wordDisplayText');
   text.textContent = '';
-  text.classList.remove('fading');
+  text.classList.remove('fading','already-guessed');
   box.classList.remove('correct','incorrect');
 }
 
@@ -3084,6 +3121,7 @@ async function startGame() {
   // Reset per-board hint state (may be overwritten by restore below)
   hintUsedThisBoard = false;
   hintedTrapKeys = new Set();
+  wrongGuesses = new Set();
 
   // Resume an in-progress board if one was saved for this exact board (e.g. tab closed/refreshed mid-board)
   const saved = loadBoardProgress();
@@ -3098,6 +3136,7 @@ async function startGame() {
     boardHistory = saved.boardHistory;
     hintUsedThisBoard = !!saved.hintUsedThisBoard;
     hintedTrapKeys = new Set(Array.isArray(saved.hintedTrapKeys) ? saved.hintedTrapKeys : []);
+    wrongGuesses = new Set(Array.isArray(saved.wrongGuesses) ? saved.wrongGuesses : []);
     updateLives();
     buildGrid(saved.words, saved);
     applyHintColours();
